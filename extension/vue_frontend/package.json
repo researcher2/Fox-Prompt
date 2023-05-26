@@ -1,0 +1,20 @@
+{
+  "name": "vue_frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node update_manifest.js",
+    "watch": "chokidar \"src/**/*.js\" \"src/**/*.vue\" -c \"npm run build\"",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "chokidar-cli": "^3.0.0",
+    "sass": "^1.62.1",
+    "vue": "^3.3.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.2.3",
+    "vite": "^4.3.5"
+  }
+}

@@ -1,0 +1,6 @@
+# Root directory
+mozilla_api_keys.txt
+
+# vue_frontend directory
+vue_frontend/node_modules/
+vue_frontend/dist/
