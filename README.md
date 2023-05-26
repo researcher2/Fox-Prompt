@@ -23,6 +23,11 @@ C:\.....\Fox-Prompt\extension>web-ext run
 
 `web-ext run` will open an isolated Firefox window for you to develop in and auto reload the extension if any file changes are detected. Assuming you have the Vite watcher running too then any changes to the Vue files should be visible in the extension after the few seconds required by Vite builds.
 
+## Build For Firefox Extensions Portal
+```
+C:\.....\Fox-Prompt\extension>web-ext build
+```
+
 ## Architecture Overview
 
 FoxPrompt uses both a background script (for saving the prompts to Firefox's browser.storage.local), and a content script script (for interacting with the ChatGPT DOM). The content script sends a message to the background script to load or store prompts. This was required because content scripts don't have access to storage. I tried experimenting with dexie.js in the content script with no luck, maybe it works in background scripts but at that point I had already given up and was using browser.storage.local.
