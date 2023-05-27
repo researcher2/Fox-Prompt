@@ -2,6 +2,8 @@
 
 Firefox extension for ChatGPT. Adds a helper window that features a prompt library, quick prompts, and the ability to hide the chat history and settings window.
 
+Currently awaiting review by Developer Hub.
+
 ## To Do
 
 - Different behaviour with sidebar for small screens.
