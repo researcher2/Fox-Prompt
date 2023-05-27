@@ -34,7 +34,7 @@ FoxPrompt uses both a background script (for saving the prompts to Firefox's bro
 
 The background script is vanilla JS, while the content script is a compiled Vue3 SFC - integration guide below.
 
-Firefox Extensions don't seems to support animation with GSAP, so some manual work was done.
+Firefox Extensions don't seem to support animation with GSAP, so some manual work was done.
 
 ## Integrating Vue3 SFC With Firefox Extension
 
