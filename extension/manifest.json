@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "FoxPrompt",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Adds a helper window to ChatGPT, featuring a prompt library, quick prompts, and the ability to hide the chat history and settings window.",
   "permissions": [
     "storage",
@@ -18,7 +18,7 @@
         "https://chat.openai.com/*"
       ],
       "js": [
-        "vue_frontend/dist/assets/page_interaction-5880b245.js"
+        "vue_frontend/dist/assets/page_interaction-f4f68681.js"
       ]
     }
   ]

@@ -3,13 +3,14 @@
 
   import PromptsList from "./PromptsList.vue"
 
+  import Papa from "papaparse"
+
   // State and Computed
   // ==========================================================================
   const state = reactive(
   {
     history_visible: true,
     container_centered: false,
-    is_chat_thinking: false,
 
     main_title: "FoxPrompt",
     mode: "helper",
@@ -64,14 +65,11 @@
 
   async function store_prompts(prompts)
   {
-    console.log("storing")
     const data = toRaw(prompts).map(x =>
     {
       const {id, name, contents, is_quick} = x;
       return {id, name, contents, is_quick};
     })
-
-    console.log(data)
 
     const response = await browser.runtime.sendMessage({
       command: "store",
@@ -91,9 +89,24 @@
     state.prompts.unshift(prompt);
   }
 
+  // Before we tried to watch the page for changes to the submit button but there were race
+  // conditions, now we check the page if the user tries to send a prompt
+  function check_if_chat_thinking()
+  {
+    const send_button = document.querySelector('textarea + button');
+    if (send_button) 
+    {
+      const child = send_button.firstChild;
+      if (child && child.tagName.toLowerCase() === 'div') 
+        return true;
+    }
+
+    return false;
+  }
+
   async function send_prompt(prompt)
   {
-    if (state.is_chat_thinking)
+    if (check_if_chat_thinking())
     {
       alert("Chat is currently thinking, please wait!")
       return
@@ -109,6 +122,63 @@
 
     if (state.mode == "prompt library")
       close_prompt_library()
+  }
+
+  function export_prompts()
+  {
+    const prepared_data = state.prompts.map(({ name, contents }) => ({ name, contents }));
+    const csv = Papa.unparse(prepared_data);
+    const csv_file = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob_url = URL.createObjectURL(csv_file);
+
+    const link = document.createElement('a');
+    link.href = blob_url;
+    link.download = 'prompts.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function import_prompts() 
+  {
+    // Create a hidden file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    // Process the file and destroy the input
+    input.addEventListener('change', function(e)
+    {
+      const file = e.target.files[0];
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: results => 
+        {   
+          if (!(results.meta.fields.includes("name") && results.meta.fields.includes("contents")))
+          {
+            alert("Invalid headers in file: " + results.meta.fields);
+            return;
+          }
+
+          for (const row of results.data)
+          {            
+            row.id = state.prompts.length;
+            row.edit = false;
+            row.is_quick = false
+            state.prompts.unshift(row);
+          }
+        },
+        error: error => alert("Problems importing file: " + error.message)
+      });
+
+      document.body.removeChild(input);
+    });
+
+    input.click();
   }
 
   // Container Morphing Animation Code 
@@ -226,21 +296,8 @@
     state.mode = "helper"
   }
 
-  // Startup and polling
+  // Startup
   // ==========================================================================
-  async function poll_for_chat_thinking()
-  {
-    let send_button = document.querySelector('textarea + button');
-    if (send_button) {
-      let child = send_button.firstChild;
-      if (child && child.tagName.toLowerCase() === 'div') {
-          state.is_chat_thinking = true;
-      } else if (state.is_chat_thinking && child && child.tagName.toLowerCase() === 'svg') {
-          state.is_chat_thinking = false;
-      }
-    }
-  }
-
   async function startup()
   {
     await get_prompts();
@@ -250,8 +307,6 @@
       () => store_prompts(state.prompts),
       { deep: true }
     )
-
-    setInterval(poll_for_chat_thinking, 10);
   }
 
   onMounted(() => 
@@ -269,6 +324,12 @@
     <div class="heading">
       <h2>{{state.main_title}}</h2>
       <div v-if="state.mode=='prompt library'" class="spacer"></div>
+      <button v-if="state.mode=='prompt library'" @click="import_prompts()" class="btn btn-primary">
+        Import
+      </button>      
+      <button v-if="state.mode=='prompt library'" @click="export_prompts()" class="btn btn-primary">
+        Export
+      </button>
       <button v-if="state.mode=='prompt library'" @click="new_prompt()" class="btn btn-primary">
         Add Prompt
       </button>

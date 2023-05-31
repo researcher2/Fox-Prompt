@@ -2,12 +2,12 @@
 
 Firefox extension for ChatGPT. Adds a helper window that features a prompt library, quick prompts, and the ability to hide the chat history and settings window.
 
-Currently awaiting review by Developer Hub.
+## Version 1.1
+- Added CSV Import and Export
 
 ## To Do
 
 - Different behaviour with sidebar for small screens.
-- CSV Import/Export
 
 ## Development Quick Start
 Open two command lines:
