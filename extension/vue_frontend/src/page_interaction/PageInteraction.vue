@@ -12,12 +12,19 @@
     history_visible: true,
     container_centered: false,
 
-    main_title: "FoxPrompt",
     mode: "helper",
     move_data: null,
+    sheet_url: "",
+    main_title: "FoxPrompt",
 
     prompts: [],
   });
+
+  const title_lookup = {
+    "prompt_library": "Prompt Library",
+    "helper": "FoxPrompt",
+    "import_sheets": "Google Sheet Import"
+  }
 
   const history_action = computed(() => state.history_visible ? "Hide" : "Show")
   const quick_prompts = computed(() => state.prompts.filter(x => x.is_quick))
@@ -120,7 +127,7 @@
 
     document.querySelector("textarea + button").click();
 
-    if (state.mode == "prompt library")
+    if (state.mode == "prompt_library")
       close_prompt_library()
   }
 
@@ -153,32 +160,94 @@
     {
       const file = e.target.files[0];
 
-      Papa.parse(file, {
+      Papa.parse(file, 
+      {
         header: true,
         skipEmptyLines: true,
         complete: results => 
         {   
-          if (!(results.meta.fields.includes("name") && results.meta.fields.includes("contents")))
+          const original_headers = results.meta.fields;
+          const headers = original_headers.map(x => x.toLowerCase());
+
+          if (!(headers.includes("name") && headers.includes("contents")))
           {
             alert("Invalid headers in file: " + results.meta.fields);
             return;
           }
 
+          const name_header = original_headers[headers.indexOf("name")];
+          const contents_header = original_headers[headers.indexOf("contents")];
+
           for (const row of results.data)
           {            
-            row.id = state.prompts.length;
-            row.edit = false;
-            row.is_quick = false
-            state.prompts.unshift(row);
+            const new_row = {};
+            new_row.id = state.prompts.length;
+            new_row.edit = false;
+            new_row.is_quick = false;
+            new_row.name = row[name_header];
+            new_row.contents = row[contents_header];
+            state.prompts.unshift(new_row);
           }
         },
         error: error => alert("Problems importing file: " + error.message)
-      });
+      })
 
       document.body.removeChild(input);
     });
 
     input.click();
+  }
+
+  function get_json_endpoint(sheet_url) 
+  {
+    // Remove "/edit?usp=sharing" from the end of the URL and replace it with "/gviz/tq?tqx=out:json"
+    let json_endpoint = sheet_url.replace(/\/edit.*$/, "/gviz/tq?tqx=out:json")
+    return json_endpoint
+  }
+
+  async function import_sheets()
+  {
+    try 
+    {
+      const json_endpoint_url = get_json_endpoint(state.sheet_url)
+      const response = await fetch(json_endpoint_url)
+      const data = await response.text()
+
+      // Extract the JSON data from the response.
+      let json = data.slice(data.indexOf("{"), data.lastIndexOf("}") + 1)
+
+      // Parse the JSON data.
+      let parsed = JSON.parse(json)
+
+      // Extract rows from the parsed data.
+      let rows = parsed.table.rows.map(row => row.c.map(col => col.v))
+
+      // Treat the first row as headers.
+      let headers = rows.shift().map(x => x.toLowerCase())
+
+      if (!(headers.includes("name") && headers.includes("contents")))
+      {
+        alert("Invalid headers in file: " + headers);
+        return;
+      }
+
+      for (const row of rows)
+      {
+        const new_row = {};
+        new_row.name = row[headers.indexOf("name")];
+        new_row.contents = row[headers.indexOf("contents")];
+        new_row.id = state.prompts.length;
+        new_row.edit = false;
+        new_row.is_quick = false
+        state.prompts.unshift(new_row);
+      }
+    } 
+    catch(error) 
+    {
+      alert('Failed to import: ' + error.message)
+    }
+
+    state.mode = "transition_to_prompt_library";
   }
 
   // Container Morphing Animation Code 
@@ -257,43 +326,41 @@
     }
   };
 
-  async function show_prompt_library()
+  async function on_leave_helper()
   {
-    if (state.mode == "helper")
-    {
-      // Triggers the fade away of the helper and the @after-leave
-      // will call this function again
-      state.mode = "";    
-      return // we'll be back
-    }
-
-    state.move_data = await new Promise(resolve => moveDivToCenter(800, 0.09, resolve))
+    state.move_data = await new Promise(resolve => moveDivToCenter(800, 0.15, resolve))
     state.container_centered = true;
     main_element.value.style.transform = "";
     main_element.value.style.width = "";
     main_element.value.style.right = "";    
-    state.main_title = "Prompt Library"
-    state.mode = "prompt library"
+    state.mode = "prompt_library"    
+    state.main_title = title_lookup[state.mode]    
   }
 
-  async function close_prompt_library()
+  async function on_leave_prompt_library()
   {
-    if (state.mode == "prompt library")
+    if (state.mode == "transition_to_sheet_import")
     {
-      // Triggers the fade away of the prompt library and the @after-leave
-      // will call this function again
-      state.mode = "";
-      return // we'll be back
+      state.mode = "import_sheets"
+      state.main_title = title_lookup[state.mode]      
     }
+    else // transition to helper
+    {
+      main_element.value.style.transform = `translate(${state.move_data.delta_x}px, ${state.move_data.delta_y}px)`;
+      main_element.value.style.width = `${state.move_data.width}px`;
+      main_element.value.style.right = `${state.move_data.right}px`;
+      state.container_centered = false;
 
-    main_element.value.style.transform = `translate(${state.move_data.delta_x}px, ${state.move_data.delta_y}px)`;
-    main_element.value.style.width = `${state.move_data.width}px`;
-    main_element.value.style.right = `${state.move_data.right}px`;
-    state.container_centered = false;
+      await new Promise(resolve => moveDivToTopRight(state.move_data, resolve))
+      state.mode = "helper"      
+      state.main_title = title_lookup[state.mode]
+    }
+  }
 
-    await new Promise(resolve => moveDivToTopRight(state.move_data, resolve))
-    state.main_title = "FoxPrompt"
-    state.mode = "helper"
+  async function on_leave_sheets_import()
+  {
+    state.mode = "prompt_library"
+    state.main_title = title_lookup[state.mode]
   }
 
   // Startup
@@ -321,26 +388,38 @@
   </Transition>
 
   <div id="extension_main_container" ref="main_element" :class="{centered: state.container_centered}">
+    <!-- Header (Always Active) -->
     <div class="heading">
       <h2>{{state.main_title}}</h2>
-      <div v-if="state.mode=='prompt library'" class="spacer"></div>
-      <button v-if="state.mode=='prompt library'" @click="import_prompts()" class="btn btn-primary">
-        Import
+      <div v-if="state.mode != 'helper'" class="spacer"></div>
+      <button v-if="state.mode=='prompt_library'" 
+              @click="state.mode='transition_to_sheet_import'" class="btn btn-primary">
+        Import Sheets
+      </button>          
+      <button v-if="state.mode=='prompt_library'" @click="import_prompts()" class="btn btn-primary">
+        Import CSV
       </button>      
-      <button v-if="state.mode=='prompt library'" @click="export_prompts()" class="btn btn-primary">
-        Export
+      <button v-if="state.mode=='prompt_library'" @click="export_prompts()" class="btn btn-primary"
+              :disabled="state.prompts.length == 0">
+        Export CSV
       </button>
-      <button v-if="state.mode=='prompt library'" @click="new_prompt()" class="btn btn-primary">
+      <button v-if="state.mode=='prompt_library'" @click="new_prompt()" class="btn btn-primary">
         Add Prompt
       </button>
-      <button v-if="state.mode=='prompt library'" @click="close_prompt_library()" class="btn btn-primary">
+      <button v-if="state.mode=='prompt_library'" 
+              @click="state.mode='transition_to_helper'" class="btn btn-primary">
         Close
+      </button>
+      <button v-if="state.mode=='import_sheets'" 
+              @click="state.mode='transition_to_prompt_library'" class="btn btn-primary">
+        Cancel
       </button>
     </div>
 
-    <Transition name="basic_fade" @after-leave="show_prompt_library()">
+    <!-- Helper -->
+    <Transition name="basic_fade" @after-leave="on_leave_helper()">
       <div class="helper" v-if="state.mode == 'helper'">
-        <button @click="show_prompt_library()" class="btn btn-primary">Prompt Library</button>
+        <button @click="state.mode='transition_to_prompt_library'" class="btn btn-primary">Prompt Library</button>
         <div class="quick_prompts">
           <label>Quick Prompts</label>
           <button v-for="prompt in quick_prompts" class="btn btn-primary" 
@@ -348,13 +427,12 @@
             {{prompt.name}}
           </button>
         </div>
-        <label>Other Tools</label>
-        <button @click="toggle_history()" class="btn btn-primary">{{history_action}} Histories</button>
       </div>
     </Transition>
 
-    <Transition name="basic_fade" @after-leave="close_prompt_library()">    
-    <div class="prompt_library" v-if="state.mode == 'prompt library'">
+    <!-- Prompt Library -->
+    <Transition name="basic_fade" @after-leave="on_leave_prompt_library()">    
+    <div class="prompt_library" v-if="state.mode == 'prompt_library'">
       <label>Quick Prompts</label>
       <PromptsList :prompts="quick_prompts" :send_prompt="send_prompt" :delete_prompt="delete_prompt">        
       </PromptsList>
@@ -362,12 +440,74 @@
       <label>Other Prompts</label>
       <PromptsList :prompts="other_prompts" :send_prompt="send_prompt" :delete_prompt="delete_prompt">        
       </PromptsList>
-      </div>
+    </div>
     </Transition>
+
+    <!-- Import Google Sheet Dialog -->
+    <Transition name="basic_fade" @after-leave="on_leave_sheets_import()">    
+    <div class="import_sheets_dialog" v-if="state.mode == 'import_sheets'">
+      <ol>
+        <li>In your google sheet click "Share"</li>
+        <li>In the modal under General Access change to "Anyone with the link"</li>
+        <li>Click "Copy link"</li>
+        <li>Paste the link into the input below and click import.</li>
+      </ol>
+      <label>Paste Link Here</label>
+      <div class="input_and_submit">
+        <input type="text" v-model="state.sheet_url" 
+               placeholder="https://docs.google.com/spreadsheets/d/SHEET_ID/edit?usp=sharing">
+        <button class="btn btn-primary" @click="import_sheets()">Import</button>
+      </div>
+    </div>
+    </Transition>
+
   </div>
 </template>
 
 <style lang="scss">
+
+  .import_sheets_dialog
+  {
+    padding-top: 10px;    
+    display:flex;
+    flex-direction: column;
+    row-gap: 5px;
+
+    ol {
+        list-style: none; /* This removes the default numbers. */
+        counter-reset: item; /* This adds a counter. */
+        margin: 0;
+        padding: 0;
+    }
+
+    ol > li {
+        counter-increment: item; /* This increments the counter. */
+        position: relative; /* This allows us to position the counter. */
+        margin-bottom: 0.8em;
+        padding-left: 1em; 
+        color: white; /* This makes the text white. */
+        font-family: Arial, sans-serif; /* This changes the font. */
+    }
+
+    ol > li:before {
+        content: counters(item, ".") ". "; /* This adds the number before the item. */
+        position: absolute; /* This allows us to position the number. */
+        left: 0;
+        color: #ffffff; /* This makes the number white. */
+    }
+
+    .input_and_submit
+    {
+      display: flex;
+      flex-direction: row;
+      column-gap: 5px;
+
+      input { 
+        flex-grow: 1; 
+        color: black;
+      }
+    }
+  }
 
   #modal_blur
   {
@@ -394,9 +534,8 @@
     position: fixed;
     top: 20px;
     right: 30px;
-    padding: 10px;
+    padding: 15px;
     border: 1px solid silver;
-    // background-color: rgba(32,33,35,var(--tw-bg-opacity));
     background-color: #202123;
     width: 160px;
     z-index: 1001;
@@ -458,5 +597,10 @@
     .btn { 
       justify-content: center;
     }
+  }
+
+  .prompt_library
+  {
+    padding-top: 10px;
   }
 </style>

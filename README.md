@@ -2,6 +2,11 @@
 
 Firefox extension for ChatGPT. Adds a helper window that features a prompt library, quick prompts, and the ability to hide the chat history and settings window.
 
+## Version 1.2
+- Remove hide histories as Open AI added the functionality natively.
+- Added the ability to import prompts from a shared Google Sheet.
+- Some minor styling changes.
+
 ## Version 1.1
 - Added CSV Import and Export
 
